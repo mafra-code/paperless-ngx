@@ -2170,3 +2170,60 @@ class TestBulkEditExtractText:
         bulk_edit.extract_text([root.id])
 
         assert self._queued_ids(mock_task) == [latest.id]
+
+
+@pytest.mark.django_db
+class TestBulkEditAiTags:
+    @pytest.fixture
+    def mock_task(self, mocker: MockerFixture) -> mock.MagicMock:
+        return mocker.patch("documents.bulk_edit.apply_ai_suggestions")
+
+    def test_ai_tags_queues_tag_suggestions(
+        self,
+        mocker: MockerFixture,
+        mock_task: mock.MagicMock,
+    ) -> None:
+        """
+        GIVEN:
+            - AI is enabled
+        WHEN:
+            - ai_tags is called
+        THEN:
+            - One task per document is queued for tags only, creating missing tags
+        """
+        mocker.patch("documents.bulk_edit.AIConfig").return_value.ai_enabled = True
+        doc = DocumentFactory()
+
+        assert bulk_edit.ai_tags([doc.id]) == "OK"
+
+        mock_task.apply_async.assert_called_once()
+        assert mock_task.apply_async.call_args.kwargs["kwargs"] == {
+            "action_id": None,
+            "document_id": doc.id,
+            "fields": ["tags"],
+            "create_missing": True,
+        }
+        assert mock_task.apply_async.call_args.kwargs["headers"] == {
+            "trigger_source": PaperlessTask.TriggerSource.MANUAL,
+        }
+        mock_task.assert_not_called()
+
+    def test_ai_tags_refuses_when_disabled(
+        self,
+        mocker: MockerFixture,
+        mock_task: mock.MagicMock,
+    ) -> None:
+        """
+        GIVEN:
+            - AI is disabled
+        WHEN:
+            - ai_tags is called
+        THEN:
+            - It raises before queueing a task
+        """
+        mocker.patch("documents.bulk_edit.AIConfig").return_value.ai_enabled = False
+
+        with pytest.raises(ValueError, match="not enabled"):
+            bulk_edit.ai_tags([1])
+
+        mock_task.apply_async.assert_not_called()

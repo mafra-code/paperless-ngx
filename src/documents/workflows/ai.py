@@ -111,22 +111,38 @@ def resolve_tags(
 
 
 def apply_ai_suggestions_to_document(
-    action: WorkflowAction,
+    action: WorkflowAction | None,
     document: Document,
     logging_group=None,
+    *,
+    fields: list[str] | None = None,
+    create_missing: bool | None = None,
 ) -> list[str]:
     """
     Get suggestions about `document` and write the chosen fields.
 
-    Returns the names of the fields that were actually changed.
+    A workflow passes its action. A manual call passes `fields` and
+    `create_missing` instead, and does not overwrite existing values.
+    Tags are always added. Returns the names of the fields that changed.
     """
-    selected = set(action.ai_suggestion_fields or [])
+    if fields is not None:
+        selected = set(fields)
+    elif action is not None:
+        selected = set(action.ai_suggestion_fields or [])
+    else:
+        selected = set()
     if not selected:
-        logger.warning(
-            "Workflow action %s has no AI suggestion fields selected, skipping",
-            action.pk,
-            extra={"group": logging_group},
-        )
+        if action is not None:
+            logger.warning(
+                "Workflow action %s has no AI suggestion fields selected, skipping",
+                action.pk,
+                extra={"group": logging_group},
+            )
+        else:
+            logger.warning(
+                "No AI suggestion fields selected, skipping",
+                extra={"group": logging_group},
+            )
         return []
 
     ai_config = AIConfig()
@@ -139,13 +155,20 @@ def apply_ai_suggestions_to_document(
         return []
 
     if not document.content.strip():
-        logger.warning(
-            "Document %s has no content, skipping AI suggestions for workflow "
-            "action %s",
-            document.pk,
-            action.pk,
-            extra={"group": logging_group},
-        )
+        if action is not None:
+            logger.warning(
+                "Document %s has no content, skipping AI suggestions for workflow "
+                "action %s",
+                document.pk,
+                action.pk,
+                extra={"group": logging_group},
+            )
+        else:
+            logger.warning(
+                "Document %s has no content, skipping AI suggestions",
+                document.pk,
+                extra={"group": logging_group},
+            )
         return []
 
     # Workflows run without a user, so we use the document owner
@@ -168,8 +191,10 @@ def apply_ai_suggestions_to_document(
         )
         return []
 
-    overwrite = action.ai_overwrite_existing
-    create_missing = action.ai_create_missing
+    # Overwrite stays on the action. The manual path only adds tags.
+    overwrite = action.ai_overwrite_existing if action is not None else False
+    if create_missing is None:
+        create_missing = action.ai_create_missing if action is not None else False
     updated_fields: list[str] = []
 
     def should_set(field: str) -> bool:

@@ -36,6 +36,7 @@ from documents.models import StoragePath
 from documents.models import Tag
 from documents.permissions import set_permissions_for_objects
 from documents.plugins.helpers import DocumentsStatusManager
+from documents.tasks import apply_ai_suggestions
 from documents.tasks import bulk_update_documents
 from documents.tasks import consume_file
 from documents.tasks import extract_text as extract_text_task
@@ -44,6 +45,7 @@ from documents.tasks import update_document_content_maybe_archive_file
 from documents.versioning import get_latest_version_for_root
 from documents.versioning import get_root_document
 from documents.versioning import versions_newest_first
+from paperless.config import AIConfig
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -406,6 +408,30 @@ def delete(doc_ids: list[int]) -> Literal["OK"]:
                 "Detected a possible incompatible database column. See https://docs.paperless-ngx.com/troubleshooting/#convert-uuid-field",
             )
         logger.error(f"Error deleting documents: {e!s}")
+
+    return "OK"
+
+
+def ai_tags(doc_ids: list[int]) -> Literal["OK"]:
+    """
+    Queue tag suggestions for the given documents.
+
+    Tags are added, and missing tags may be created. Nothing runs in the
+    request beyond the queue.
+    """
+    if not AIConfig().ai_enabled:
+        raise ValueError("AI is not enabled")
+
+    for document_id in doc_ids:
+        apply_ai_suggestions.apply_async(
+            kwargs={
+                "action_id": None,
+                "document_id": document_id,
+                "fields": ["tags"],
+                "create_missing": True,
+            },
+            headers={"trigger_source": PaperlessTask.TriggerSource.MANUAL},
+        )
 
     return "OK"
 

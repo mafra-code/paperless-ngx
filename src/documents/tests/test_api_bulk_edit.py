@@ -2781,3 +2781,136 @@ class TestBulkEditAPI(DirectoriesMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(response.content, b"Insufficient permissions")
         method.assert_not_called()
+
+    @mock.patch("documents.bulk_edit.AIConfig")
+    @mock.patch("documents.bulk_edit.apply_ai_suggestions.apply_async")
+    def test_ai_tags_queues_tasks(self, apply_async, ai_config) -> None:
+        """
+        GIVEN:
+            - AI is enabled
+        WHEN:
+            - ai_tags bulk edit is called
+        THEN:
+            - A tag suggestion task is queued and not run in the request
+        """
+        ai_config.return_value.ai_enabled = True
+        response = self.client.post(
+            "/api/documents/bulk_edit/",
+            json.dumps(
+                {
+                    "documents": [self.doc1.id],
+                    "method": "ai_tags",
+                    "parameters": {},
+                },
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        apply_async.assert_called_once()
+        self.assertEqual(
+            apply_async.call_args.kwargs["kwargs"],
+            {
+                "action_id": None,
+                "document_id": self.doc1.id,
+                "fields": ["tags"],
+                "create_missing": True,
+            },
+        )
+
+    @mock.patch("documents.bulk_edit.AIConfig")
+    @mock.patch("documents.bulk_edit.apply_ai_suggestions.apply_async")
+    def test_ai_tags_disabled_returns_400(self, apply_async, ai_config) -> None:
+        """
+        GIVEN:
+            - AI is disabled
+        WHEN:
+            - ai_tags bulk edit is called
+        THEN:
+            - The response is 400 and nothing is queued
+        """
+        ai_config.return_value.ai_enabled = False
+        response = self.client.post(
+            "/api/documents/bulk_edit/",
+            json.dumps(
+                {
+                    "documents": [self.doc1.id],
+                    "method": "ai_tags",
+                    "parameters": {},
+                },
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        apply_async.assert_not_called()
+
+    @mock.patch("documents.serialisers.bulk_edit.ai_tags")
+    def test_ai_tags_select_all_resolves_ids(self, method) -> None:
+        """
+        GIVEN:
+            - Several documents
+        WHEN:
+            - ai_tags is called with all=true
+        THEN:
+            - The method receives every document id
+        """
+        self.setup_mock(method, "ai_tags")
+        response = self.client.post(
+            "/api/documents/bulk_edit/",
+            json.dumps(
+                {
+                    "all": True,
+                    "method": "ai_tags",
+                    "parameters": {},
+                },
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        method.assert_called_once()
+        self.assertCountEqual(
+            method.call_args.args[0],
+            [
+                self.doc1.id,
+                self.doc2.id,
+                self.doc3.id,
+                self.doc4.id,
+                self.doc5.id,
+            ],
+        )
+
+    @mock.patch("documents.serialisers.bulk_edit.ai_tags")
+    def test_ai_tags_requires_change_permission(self, method) -> None:
+        """
+        GIVEN:
+            - A user who cannot change one of the selected documents
+        WHEN:
+            - ai_tags bulk edit is called
+        THEN:
+            - The response is 403 and nothing is queued
+        """
+        self.setup_mock(method, "ai_tags")
+        self.doc1.owner = UserFactory(username="ai-tags-owner")
+        self.doc1.save()
+        user = UserFactory(username="ai-tags-user")
+        grant_global(user, "change_document")
+        user = User.objects.get(pk=user.pk)
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            "/api/documents/bulk_edit/",
+            json.dumps(
+                {
+                    "documents": [self.doc1.id, self.doc2.id],
+                    "method": "ai_tags",
+                    "parameters": {},
+                },
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.content, b"Insufficient permissions")
+        method.assert_not_called()

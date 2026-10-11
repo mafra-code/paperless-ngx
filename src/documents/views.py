@@ -3167,6 +3167,7 @@ class BulkEditView(DocumentOperationPermissionMixin):
         "remove_password": None,
         # The document changes later, inside the queued task
         "extract_text": None,
+        "ai_tags": None,
     }
 
     serializer_class = BulkEditSerializer

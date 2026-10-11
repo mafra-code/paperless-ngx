@@ -843,26 +843,50 @@ def extract_text(self, document_id: int) -> None:
     retry_backoff_max=600,
     retry_jitter=True,
 )
-def apply_ai_suggestions(self, action_id: int, document_id: int) -> None:
+def apply_ai_suggestions(
+    self,
+    action_id: int | None,
+    document_id: int,
+    fields: list[str] | None = None,
+    create_missing: bool = False,
+) -> None:
     """
     Deferred "apply AI suggestions" workflow action.
+
+    Workflows pass an action id. A manual call leaves the action out and
+    passes the fields to apply, plus whether missing objects may be created.
     """
     from documents.models import WorkflowAction
     from documents.workflows.ai import apply_ai_suggestions_to_document
 
     try:
-        action = WorkflowAction.objects.get(pk=action_id)
         document = Document.objects.select_related("owner").get(pk=document_id)
-    except (WorkflowAction.DoesNotExist, Document.DoesNotExist):
+    except Document.DoesNotExist:
         logger.warning(
-            "Workflow action %s or document %s no longer exists, "
-            "not applying AI suggestions",
-            action_id,
+            "Document %s no longer exists, not applying AI suggestions",
             document_id,
         )
         return
 
-    if not apply_ai_suggestions_to_document(action, document):
+    if action_id is not None:
+        try:
+            action = WorkflowAction.objects.get(pk=action_id)
+        except WorkflowAction.DoesNotExist:
+            logger.warning(
+                "Workflow action %s no longer exists, not applying AI suggestions",
+                action_id,
+            )
+            return
+        changed = apply_ai_suggestions_to_document(action, document)
+    else:
+        changed = apply_ai_suggestions_to_document(
+            None,
+            document,
+            fields=fields,
+            create_missing=create_missing,
+        )
+
+    if not changed:
         return
 
     # No document_updated signal to avoid loop

@@ -635,6 +635,33 @@ class TestApplyAISuggestionsTask(DirectoriesMixin, TestCase):
         apply_suggestions.assert_not_called()
         self.assertIn("no longer exists", "".join(cm.output))
 
+    def test_manual_call_passes_fields_without_an_action(self) -> None:
+        """
+        GIVEN:
+            - A manual tag request, with no workflow action
+        WHEN:
+            - The task runs
+        THEN:
+            - The field list and create_missing are forwarded, and overwrite is not
+        """
+        with mock.patch(
+            "documents.workflows.ai.apply_ai_suggestions_to_document",
+            return_value=[],
+        ) as apply_suggestions:
+            tasks.apply_ai_suggestions(
+                None,
+                self.doc.pk,
+                fields=["tags"],
+                create_missing=True,
+            )
+
+        apply_suggestions.assert_called_once()
+        args, kwargs = apply_suggestions.call_args
+        self.assertIsNone(args[0])
+        self.assertEqual(args[1].pk, self.doc.pk)
+        self.assertEqual(kwargs["fields"], ["tags"])
+        self.assertIs(kwargs["create_missing"], True)
+
 
 class TestExtractTextTask(DirectoriesMixin, TestCase):
     def _document(self, **kwargs) -> Document:
