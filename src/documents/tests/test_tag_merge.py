@@ -223,6 +223,9 @@ class TestTagMerge(DirectoriesMixin):
             )
 
         grant_object(allowed, owned, "delete_tag")
+        target.owner = owned.owner
+        target.save(update_fields=["owner"])
+        grant_object(allowed, target, "change_tag")
         merge_tags(user=allowed, target_id=target.id, source_ids=[owned.id])
         assert not Tag.objects.filter(pk=owned.id).exists()
 

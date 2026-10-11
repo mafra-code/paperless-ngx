@@ -741,7 +741,10 @@ class TestExtractTextTask(DirectoriesMixin, TestCase):
             self.assertLogs("paperless.tasks", level="ERROR") as cm,
             self.assertRaises(FileNotFoundError),
         ):
-            tasks.extract_text.apply(kwargs={"document_id": doc.pk})
+            tasks.extract_text.apply(
+                kwargs={"document_id": doc.pk},
+                throw=True,
+            )
 
         self.assertIn("does not exist", "".join(cm.output))
 
@@ -764,6 +767,9 @@ class TestExtractTextTask(DirectoriesMixin, TestCase):
             self.assertLogs("paperless.tasks", level="ERROR") as cm,
             self.assertRaises(RuntimeError),
         ):
-            tasks.extract_text.apply(kwargs={"document_id": doc.pk})
+            tasks.extract_text.apply(
+                kwargs={"document_id": doc.pk},
+                throw=True,
+            )
 
         self.assertIn("Extract text script failed", "".join(cm.output))
