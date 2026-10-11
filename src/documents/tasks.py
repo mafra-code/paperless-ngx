@@ -31,6 +31,7 @@ from documents.consumer import ConsumeFileDuplicateError
 from documents.consumer import ConsumerPlugin
 from documents.consumer import ConsumerPreflightPlugin
 from documents.consumer import WorkflowTriggerPlugin
+from documents.consumer import build_document_script_environment
 from documents.consumer import should_produce_archive
 from documents.data_models import ConsumableDocument
 from documents.data_models import ConsumeFileDuplicateResult
@@ -67,7 +68,9 @@ from documents.signals.handlers import send_websocket_document_updated
 from documents.utils import IterWrapper
 from documents.utils import compute_checksum
 from documents.utils import identity
+from documents.utils import run_subprocess
 from documents.versioning import annotate_effective_content
+from documents.versioning import versions_newest_first
 from documents.workflows.utils import get_workflows_for_trigger
 from paperless.config import AIConfig
 from paperless.config import BarcodeConfig
@@ -760,6 +763,76 @@ def llmindex_index(
         iter_wrapper=iter_wrapper,
         rebuild=rebuild,
     )
+
+
+def _document_for_extract_text(document_id: int) -> Document:
+    """
+    File a manual extract should read.
+
+    A root with versions shows its latest version, the same file reprocess
+    would parse.
+    """
+    document = Document.objects.select_related(
+        "owner",
+        "document_type",
+        "correspondent",
+    ).get(pk=document_id)
+    if document.root_document_id is not None:
+        return document
+    latest = (
+        versions_newest_first(Document.objects.filter(root_document=document))
+        .select_related("owner", "document_type", "correspondent")
+        .first()
+    )
+    return latest or document
+
+
+@shared_task(bind=True)
+def extract_text(self, document_id: int) -> None:
+    """
+    Run the configured extract-text script for one document.
+
+    The script is not run from the HTTP request. A missing or failing script
+    is logged and the task fails so it shows up in the task list.
+    """
+    script = settings.EXTRACT_TEXT_SCRIPT
+    if not script or not Path(script).is_file():
+        logger.error(
+            "Extract text script %s is not configured or does not exist",
+            script or "",
+        )
+        raise FileNotFoundError(
+            f"Extract text script {script or ''} is not configured or does not exist",
+        )
+
+    try:
+        document = _document_for_extract_text(document_id)
+    except Document.DoesNotExist:
+        logger.error(
+            "Document %s no longer exists, not extracting text",
+            document_id,
+        )
+        raise
+
+    script_env = build_document_script_environment(
+        document,
+        task_id=self.request.id or "",
+    )
+    # The script decides what to signal. Post-consume does not set this.
+    script_env["PAPERLESS_TRIGGER"] = "manual"
+    logger.info(
+        "Executing extract text script %s for document %s",
+        script,
+        document.pk,
+    )
+    try:
+        run_subprocess([script], script_env, logger)
+    except Exception:
+        logger.exception(
+            "Extract text script failed for document %s",
+            document.pk,
+        )
+        raise
 
 
 @shared_task(

@@ -30,6 +30,7 @@ class TestApiUiSettings(DirectoriesMixin, APITestCase):
         EMAIL_ENABLED=False,
         GMAIL_OAUTH_ENABLED=False,
         OUTLOOK_OAUTH_ENABLED=False,
+        EXTRACT_TEXT_SCRIPT=None,
     )
     def test_api_get_ui_settings(self) -> None:
         response = self.client.get(self.ENDPOINT, format="json")
@@ -60,6 +61,7 @@ class TestApiUiSettings(DirectoriesMixin, APITestCase):
                 },
                 "email_enabled": False,
                 "ai_enabled": False,
+                "extract_text_configured": False,
                 "remote_ocr": {
                     "configured": False,
                     "mode": "always",
@@ -219,4 +221,23 @@ class TestApiUiSettings(DirectoriesMixin, APITestCase):
         )
         self.assertIsNotNone(
             response.data["settings"]["outlook_oauth_url"],
+        )
+
+    @override_settings(EXTRACT_TEXT_SCRIPT="/usr/local/bin/extract-text")
+    def test_extract_text_configured_follows_the_script_setting(self) -> None:
+        """
+        GIVEN:
+            - PAPERLESS_EXTRACT_TEXT_SCRIPT is set
+        WHEN:
+            - UI settings are requested
+        THEN:
+            - extract_text_configured is true and the path is not returned
+        """
+        response = self.client.get(self.ENDPOINT, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["settings"]["extract_text_configured"])
+        self.assertNotIn(
+            "/usr/local/bin/extract-text",
+            response.data["settings"].values(),
         )

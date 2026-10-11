@@ -1884,6 +1884,7 @@ class BulkEditSerializer(
             "modify_tags",
             "modify_custom_fields",
             "set_permissions",
+            "extract_text",
             *LEGACY_DOCUMENT_ACTION_METHODS,
         ],
         label="Method",
@@ -1973,6 +1974,8 @@ class BulkEditSerializer(
             return bulk_edit.reprocess
         elif method == "set_permissions":
             return bulk_edit.set_permissions
+        elif method == "extract_text":
+            return bulk_edit.extract_text
         elif method == "rotate":
             return bulk_edit.rotate
         elif method == "merge":

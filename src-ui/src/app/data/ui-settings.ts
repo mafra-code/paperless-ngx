@@ -117,6 +117,7 @@ export const SETTINGS_KEYS = {
   OUTLOOK_OAUTH_URL: 'outlook_oauth_url',
   EMAIL_ENABLED: 'email_enabled',
   AI_ENABLED: 'ai_enabled',
+  EXTRACT_TEXT_CONFIGURED: 'extract_text_configured',
   REMOTE_OCR_CONFIGURED: 'remote_ocr:configured',
   REMOTE_OCR_MODE: 'remote_ocr:mode',
 }
@@ -381,6 +382,11 @@ export const SETTINGS: UiSetting[] = [
   },
   {
     key: SETTINGS_KEYS.AI_ENABLED,
+    type: 'boolean',
+    default: false,
+  },
+  {
+    key: SETTINGS_KEYS.EXTRACT_TEXT_CONFIGURED,
     type: 'boolean',
     default: false,
   },

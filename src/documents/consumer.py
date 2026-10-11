@@ -239,6 +239,49 @@ class ConsumerPluginMixin:
         raise ConsumerError(f"{self.filename}: {log_message or message}") from exception
 
 
+def build_document_script_environment(
+    document: Document,
+    task_id: str | None = None,
+) -> dict[str, str]:
+    """
+    Environment for a document script: the existing DOCUMENT_* variables plus
+    TASK_ID. Callers add their own trigger variable when they have one.
+    """
+    script_env = os.environ.copy()
+
+    script_env["DOCUMENT_ID"] = str(document.pk)
+    script_env["DOCUMENT_TYPE"] = str(document.document_type)
+    script_env["DOCUMENT_CREATED"] = str(document.created)
+    script_env["DOCUMENT_MODIFIED"] = str(document.modified)
+    script_env["DOCUMENT_ADDED"] = str(document.added)
+    script_env["DOCUMENT_FILE_NAME"] = document.get_public_filename()
+    script_env["DOCUMENT_SOURCE_PATH"] = os.path.normpath(document.source_path)
+    script_env["DOCUMENT_ARCHIVE_PATH"] = os.path.normpath(
+        str(document.archive_path),
+    )
+    script_env["DOCUMENT_THUMBNAIL_PATH"] = os.path.normpath(
+        document.thumbnail_path,
+    )
+    script_env["DOCUMENT_DOWNLOAD_URL"] = reverse(
+        "document-download",
+        kwargs={"pk": document.pk},
+    )
+    script_env["DOCUMENT_THUMBNAIL_URL"] = reverse(
+        "document-thumb",
+        kwargs={"pk": document.pk},
+    )
+    script_env["DOCUMENT_OWNER"] = (
+        document.owner.get_username() if document.owner else ""
+    )
+    script_env["DOCUMENT_CORRESPONDENT"] = str(document.correspondent)
+    script_env["DOCUMENT_TAGS"] = str(
+        ",".join(document.tags.all().values_list("name", flat=True)),
+    )
+    script_env["DOCUMENT_ORIGINAL_FILENAME"] = str(document.original_filename)
+    script_env["TASK_ID"] = task_id or ""
+    return script_env
+
+
 class ConsumerPlugin(
     AlwaysRunPluginMixin,
     NoSetupPluginMixin,
@@ -351,38 +394,7 @@ class ConsumerPlugin(
             f"Executing post-consume script {settings.POST_CONSUME_SCRIPT}",
         )
 
-        script_env = os.environ.copy()
-
-        script_env["DOCUMENT_ID"] = str(document.pk)
-        script_env["DOCUMENT_TYPE"] = str(document.document_type)
-        script_env["DOCUMENT_CREATED"] = str(document.created)
-        script_env["DOCUMENT_MODIFIED"] = str(document.modified)
-        script_env["DOCUMENT_ADDED"] = str(document.added)
-        script_env["DOCUMENT_FILE_NAME"] = document.get_public_filename()
-        script_env["DOCUMENT_SOURCE_PATH"] = os.path.normpath(document.source_path)
-        script_env["DOCUMENT_ARCHIVE_PATH"] = os.path.normpath(
-            str(document.archive_path),
-        )
-        script_env["DOCUMENT_THUMBNAIL_PATH"] = os.path.normpath(
-            document.thumbnail_path,
-        )
-        script_env["DOCUMENT_DOWNLOAD_URL"] = reverse(
-            "document-download",
-            kwargs={"pk": document.pk},
-        )
-        script_env["DOCUMENT_THUMBNAIL_URL"] = reverse(
-            "document-thumb",
-            kwargs={"pk": document.pk},
-        )
-        script_env["DOCUMENT_OWNER"] = (
-            document.owner.get_username() if document.owner else ""
-        )
-        script_env["DOCUMENT_CORRESPONDENT"] = str(document.correspondent)
-        script_env["DOCUMENT_TAGS"] = str(
-            ",".join(document.tags.all().values_list("name", flat=True)),
-        )
-        script_env["DOCUMENT_ORIGINAL_FILENAME"] = str(document.original_filename)
-        script_env["TASK_ID"] = self.task_id or ""
+        script_env = build_document_script_environment(document, self.task_id)
 
         try:
             run_subprocess(

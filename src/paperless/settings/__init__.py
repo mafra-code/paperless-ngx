@@ -1000,6 +1000,8 @@ EMAIL_PARSE_DEFAULT_LAYOUT = get_int_from_env(
 # Trigger a script after every successful document consumption?
 PRE_CONSUME_SCRIPT = os.getenv("PAPERLESS_PRE_CONSUME_SCRIPT")
 POST_CONSUME_SCRIPT = os.getenv("PAPERLESS_POST_CONSUME_SCRIPT")
+# Manual "Extract text" bulk action. Environment only, never from the API.
+EXTRACT_TEXT_SCRIPT = os.getenv("PAPERLESS_EXTRACT_TEXT_SCRIPT")
 
 # Specify the default date order (for autodetected dates)
 DATE_ORDER = os.getenv("PAPERLESS_DATE_ORDER", "DMY")

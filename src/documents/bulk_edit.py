@@ -38,6 +38,7 @@ from documents.permissions import set_permissions_for_objects
 from documents.plugins.helpers import DocumentsStatusManager
 from documents.tasks import bulk_update_documents
 from documents.tasks import consume_file
+from documents.tasks import extract_text as extract_text_task
 from documents.tasks import remove_document_from_index
 from documents.tasks import update_document_content_maybe_archive_file
 from documents.versioning import get_latest_version_for_root
@@ -405,6 +406,40 @@ def delete(doc_ids: list[int]) -> Literal["OK"]:
                 "Detected a possible incompatible database column. See https://docs.paperless-ngx.com/troubleshooting/#convert-uuid-field",
             )
         logger.error(f"Error deleting documents: {e!s}")
+
+    return "OK"
+
+
+def extract_text(doc_ids: list[int]) -> Literal["OK"]:
+    """
+    Queue extract-text for the given documents.
+
+    A root document with versions uses its latest version, the file whose
+    content is shown for it. The script itself runs later, in the task.
+    """
+    if not settings.EXTRACT_TEXT_SCRIPT:
+        raise ValueError("Extract text script is not configured")
+
+    latest_version = versions_newest_first(
+        Document.objects.filter(root_document=OuterRef("pk")),
+    ).values("id")[:1]
+    source_ids = (
+        Document.objects.filter(id__in=doc_ids)
+        .annotate(
+            source_id=Case(
+                When(root_document__isnull=False, then=F("id")),
+                default=Coalesce(Subquery(latest_version), F("id")),
+            ),
+        )
+        .order_by()
+        .values_list("source_id", flat=True)
+        .distinct()
+    )
+    for source_id in source_ids:
+        extract_text_task.apply_async(
+            kwargs={"document_id": source_id},
+            headers={"trigger_source": PaperlessTask.TriggerSource.MANUAL},
+        )
 
     return "OK"
 

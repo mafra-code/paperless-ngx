@@ -2652,3 +2652,132 @@ class TestBulkEditAPI(DirectoriesMixin, APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn(b"notadate", response.content)
+
+    @override_settings(EXTRACT_TEXT_SCRIPT="/opt/extract-text")
+    @mock.patch("documents.bulk_edit.extract_text_task.apply_async")
+    def test_extract_text_queues_tasks(self, apply_async) -> None:
+        """
+        GIVEN:
+            - An extract text script is configured
+        WHEN:
+            - extract_text bulk edit is called
+        THEN:
+            - A task is queued and the script is not run in the request
+        """
+        response = self.client.post(
+            "/api/documents/bulk_edit/",
+            json.dumps(
+                {
+                    "documents": [self.doc1.id],
+                    "method": "extract_text",
+                    "parameters": {},
+                },
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        apply_async.assert_called_once()
+        self.assertEqual(
+            apply_async.call_args.kwargs["kwargs"],
+            {"document_id": self.doc1.id},
+        )
+
+    @override_settings(EXTRACT_TEXT_SCRIPT="")
+    @mock.patch("documents.bulk_edit.extract_text_task.apply_async")
+    def test_extract_text_missing_script_returns_400(self, apply_async) -> None:
+        """
+        GIVEN:
+            - No extract text script is configured
+        WHEN:
+            - extract_text bulk edit is called
+        THEN:
+            - The response is 400 and nothing is queued
+        """
+        response = self.client.post(
+            "/api/documents/bulk_edit/",
+            json.dumps(
+                {
+                    "documents": [self.doc1.id],
+                    "method": "extract_text",
+                    "parameters": {},
+                },
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        apply_async.assert_not_called()
+
+    @override_settings(EXTRACT_TEXT_SCRIPT="/opt/extract-text")
+    @mock.patch("documents.serialisers.bulk_edit.extract_text")
+    def test_extract_text_select_all_resolves_ids(self, method) -> None:
+        """
+        GIVEN:
+            - Several documents
+        WHEN:
+            - extract_text is called with all=true
+        THEN:
+            - The method receives every document id
+        """
+        self.setup_mock(method, "extract_text")
+        response = self.client.post(
+            "/api/documents/bulk_edit/",
+            json.dumps(
+                {
+                    "all": True,
+                    "method": "extract_text",
+                    "parameters": {},
+                },
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        method.assert_called_once()
+        self.assertCountEqual(
+            method.call_args.args[0],
+            [
+                self.doc1.id,
+                self.doc2.id,
+                self.doc3.id,
+                self.doc4.id,
+                self.doc5.id,
+            ],
+        )
+
+    @override_settings(EXTRACT_TEXT_SCRIPT="/opt/extract-text")
+    @mock.patch("documents.serialisers.bulk_edit.extract_text")
+    def test_extract_text_requires_change_permission(self, method) -> None:
+        """
+        GIVEN:
+            - A user who cannot change one of the selected documents
+        WHEN:
+            - extract_text bulk edit is called
+        THEN:
+            - The response is 403 and nothing is queued
+        """
+        self.setup_mock(method, "extract_text")
+        owner = UserFactory(username="extract-owner")
+        self.doc1.owner = owner
+        self.doc1.save()
+        user = UserFactory(username="extract-user")
+        grant_global(user, "change_document")
+        user = User.objects.get(pk=user.pk)
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            "/api/documents/bulk_edit/",
+            json.dumps(
+                {
+                    "documents": [self.doc1.id, self.doc2.id],
+                    "method": "extract_text",
+                    "parameters": {},
+                },
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.content, b"Insufficient permissions")
+        method.assert_not_called()

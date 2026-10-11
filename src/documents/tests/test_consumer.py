@@ -1553,6 +1553,7 @@ class PostConsumeTestCase(DirectoriesMixin, GetConsumerMixin, TestCase):
                 }
 
                 self.assertDictEqual(environment, {**environment, **subset})
+                self.assertNotIn("PAPERLESS_TRIGGER", environment)
 
     def test_script_exit_non_zero(self) -> None:
         """

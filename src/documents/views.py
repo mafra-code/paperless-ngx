@@ -3165,6 +3165,8 @@ class BulkEditView(DocumentOperationPermissionMixin):
         "edit_pdf": None,
         "reprocess": "checksum",
         "remove_password": None,
+        # The document changes later, inside the queued task
+        "extract_text": None,
     }
 
     serializer_class = BulkEditSerializer
@@ -4304,6 +4306,7 @@ class UiSettingsView(GenericAPIView[Any]):
         ai_config = AIConfig()
 
         ui_settings["ai_enabled"] = ai_config.ai_enabled
+        ui_settings["extract_text_configured"] = bool(settings.EXTRACT_TEXT_SCRIPT)
 
         user_resp = {
             "id": user.id,

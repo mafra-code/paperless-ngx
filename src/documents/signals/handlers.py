@@ -1068,6 +1068,7 @@ TRACKED_TASKS: dict[str, PaperlessTask.TaskType] = {
     "documents.tasks.build_share_link_bundle": PaperlessTask.TaskType.BUILD_SHARE_LINK,
     "documents.bulk_edit.delete": PaperlessTask.TaskType.BULK_DELETE,
     "documents.tasks.apply_ai_suggestions": PaperlessTask.TaskType.APPLY_AI_SUGGESTIONS,
+    "documents.tasks.extract_text": PaperlessTask.TaskType.EXTRACT_TEXT,
 }
 
 _CELERY_STATE_TO_STATUS: dict[str, PaperlessTask.Status] = {
@@ -1121,7 +1122,10 @@ def _extract_input_data(
             return {"account_ids": account_ids}
         return {}
 
-    if task_type == PaperlessTask.TaskType.APPLY_AI_SUGGESTIONS:
+    if task_type in {
+        PaperlessTask.TaskType.APPLY_AI_SUGGESTIONS,
+        PaperlessTask.TaskType.EXTRACT_TEXT,
+    }:
         document_id = task_kwargs.get("document_id")
         if document_id is not None:
             return {"document_id": document_id}

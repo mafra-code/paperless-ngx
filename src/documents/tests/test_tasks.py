@@ -1,4 +1,6 @@
+import os
 import shutil
+import tempfile
 from datetime import timedelta
 from pathlib import Path
 from unittest import mock
@@ -632,3 +634,109 @@ class TestApplyAISuggestionsTask(DirectoriesMixin, TestCase):
 
         apply_suggestions.assert_not_called()
         self.assertIn("no longer exists", "".join(cm.output))
+
+
+class TestExtractTextTask(DirectoriesMixin, TestCase):
+    def _document(self, **kwargs) -> Document:
+        defaults = {
+            "title": "doc",
+            "content": "content",
+            "mime_type": "application/pdf",
+            "filename": "doc.pdf",
+        }
+        defaults.update(kwargs)
+        return DocumentFactory(**defaults)
+
+    def _script(self) -> str:
+        handle = tempfile.NamedTemporaryFile(delete=False)
+        handle.close()
+        self.addCleanup(Path(handle.name).unlink, missing_ok=True)
+        return handle.name
+
+    def test_environment_uses_latest_version_and_manual_trigger(self) -> None:
+        """
+        GIVEN:
+            - A root document with a later version
+            - An extract text script
+        WHEN:
+            - The task runs for the root document
+        THEN:
+            - The script sees the latest version's path and PAPERLESS_TRIGGER=manual
+        """
+        root = self._document(filename="root.pdf", checksum="extract-root")
+        self._document(
+            filename="older.pdf",
+            checksum="extract-older",
+            root_document=root,
+            version_index=1,
+        )
+        latest = self._document(
+            filename="latest.pdf",
+            checksum="extract-latest",
+            root_document=root,
+            version_index=2,
+        )
+
+        script = self._script()
+        with (
+            override_settings(EXTRACT_TEXT_SCRIPT=script),
+            mock.patch("documents.tasks.run_subprocess") as run,
+        ):
+            tasks.extract_text.apply(
+                kwargs={"document_id": root.pk},
+                task_id="extract-task",
+            )
+
+        run.assert_called_once()
+        command, env = run.call_args.args[0], run.call_args.args[1]
+        self.assertEqual(command, [script])
+        self.assertEqual(env["PAPERLESS_TRIGGER"], "manual")
+        self.assertEqual(env["DOCUMENT_ID"], str(latest.pk))
+        self.assertEqual(
+            env["DOCUMENT_SOURCE_PATH"],
+            os.path.normpath(latest.source_path),
+        )
+        self.assertEqual(env["TASK_ID"], "extract-task")
+        self.assertIn("DOCUMENT_FILE_NAME", env)
+
+    def test_missing_script_is_logged_and_fails(self) -> None:
+        """
+        GIVEN:
+            - The extract text script path does not exist
+        WHEN:
+            - The task runs
+        THEN:
+            - The failure is logged and the task raises
+        """
+        doc = self._document(checksum="extract-missing")
+        with (
+            override_settings(EXTRACT_TEXT_SCRIPT="/no/such/extract-text"),
+            self.assertLogs("paperless.tasks", level="ERROR") as cm,
+            self.assertRaises(FileNotFoundError),
+        ):
+            tasks.extract_text.apply(kwargs={"document_id": doc.pk})
+
+        self.assertIn("does not exist", "".join(cm.output))
+
+    def test_failing_script_is_logged_and_fails(self) -> None:
+        """
+        GIVEN:
+            - An extract text script that fails
+        WHEN:
+            - The task runs
+        THEN:
+            - The failure is logged and re-raised
+        """
+        doc = self._document(checksum="extract-fails")
+        with (
+            override_settings(EXTRACT_TEXT_SCRIPT=self._script()),
+            mock.patch(
+                "documents.tasks.run_subprocess",
+                side_effect=RuntimeError("script failed"),
+            ),
+            self.assertLogs("paperless.tasks", level="ERROR") as cm,
+            self.assertRaises(RuntimeError),
+        ):
+            tasks.extract_text.apply(kwargs={"document_id": doc.pk})
+
+        self.assertIn("Extract text script failed", "".join(cm.output))

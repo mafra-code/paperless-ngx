@@ -21,6 +21,7 @@ from documents.models import CustomField
 from documents.models import CustomFieldInstance
 from documents.models import Document
 from documents.models import DocumentType
+from documents.models import PaperlessTask
 from documents.models import StoragePath
 from documents.models import Tag
 from documents.permissions import set_permissions_for_objects
@@ -2083,5 +2084,89 @@ class TestBulkEditReprocess:
         )
 
         bulk_edit.reprocess([root.id, latest.id])
+
+        assert self._queued_ids(mock_task) == [latest.id]
+
+
+@pytest.mark.django_db
+class TestBulkEditExtractText:
+    @pytest.fixture
+    def mock_task(self, mocker: MockerFixture) -> mock.MagicMock:
+        return mocker.patch("documents.bulk_edit.extract_text_task")
+
+    @staticmethod
+    def _queued_ids(mock_task: mock.MagicMock) -> list[int]:
+        return [
+            call.kwargs["kwargs"]["document_id"]
+            for call in mock_task.apply_async.call_args_list
+        ]
+
+    def test_extract_text_queues_without_running(
+        self,
+        mock_task: mock.MagicMock,
+        settings,
+    ) -> None:
+        """
+        GIVEN:
+            - An extract text script is configured
+        WHEN:
+            - extract_text is called
+        THEN:
+            - One task is queued per document and the script is not run here
+        """
+        settings.EXTRACT_TEXT_SCRIPT = "/opt/extract-text"
+        doc = DocumentFactory()
+
+        assert bulk_edit.extract_text([doc.id]) == "OK"
+
+        mock_task.apply_async.assert_called_once()
+        assert mock_task.apply_async.call_args.kwargs["kwargs"] == {
+            "document_id": doc.id,
+        }
+        assert mock_task.apply_async.call_args.kwargs["headers"] == {
+            "trigger_source": PaperlessTask.TriggerSource.MANUAL,
+        }
+        mock_task.assert_not_called()
+
+    def test_extract_text_refuses_when_unconfigured(
+        self,
+        mock_task: mock.MagicMock,
+        settings,
+    ) -> None:
+        """
+        GIVEN:
+            - No extract text script is configured
+        WHEN:
+            - extract_text is called
+        THEN:
+            - It raises before queueing a task
+        """
+        settings.EXTRACT_TEXT_SCRIPT = ""
+        doc = DocumentFactory()
+
+        with pytest.raises(ValueError, match="not configured"):
+            bulk_edit.extract_text([doc.id])
+
+        mock_task.apply_async.assert_not_called()
+
+    def test_extract_text_root_uses_latest_version(
+        self,
+        mock_task: mock.MagicMock,
+        settings,
+    ) -> None:
+        """
+        GIVEN:
+            - A root document with two versions
+        WHEN:
+            - extract_text is called with the root document
+        THEN:
+            - The latest version is queued, not the root's original file
+        """
+        settings.EXTRACT_TEXT_SCRIPT = "/opt/extract-text"
+        root = DocumentFactory()
+        DocumentFactory(root_document=root, version_index=1)
+        latest = DocumentFactory(root_document=root, version_index=2)
+
+        bulk_edit.extract_text([root.id])
 
         assert self._queued_ids(mock_task) == [latest.id]
