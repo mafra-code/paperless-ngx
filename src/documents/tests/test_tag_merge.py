@@ -336,11 +336,7 @@ class TestTagMergeAPI(DirectoriesMixin):
         suggested = client.get("/api/tags/merge_suggestions/")
         assert suggested.status_code == status.HTTP_200_OK
         assert Tag.objects.filter(pk=right.id).exists()
-        ids = {
-            tag["id"]
-            for group in suggested.data["groups"]
-            for tag in group["tags"]
-        }
+        ids = {tag["id"] for group in suggested.data["groups"] for tag in group["tags"]}
         assert {left.id, right.id} <= ids
 
         refused = client.post(

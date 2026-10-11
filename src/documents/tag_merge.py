@@ -215,11 +215,7 @@ def _rewrite_saved_view_rules(source_ids: set[int], target_id: int) -> None:
         rule_type__in=TAG_ID_RULE_TYPES,
     ).exclude(value__isnull=True)
     for rule in rules.iterator():
-        parts = [
-            part.strip()
-            for part in (rule.value or "").split(",")
-            if part.strip()
-        ]
+        parts = [part.strip() for part in (rule.value or "").split(",") if part.strip()]
         if not any(part in source_text for part in parts):
             continue
         rewritten: list[str] = []

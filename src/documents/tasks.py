@@ -848,6 +848,7 @@ def apply_ai_suggestions(
     action_id: int | None,
     document_id: int,
     fields: list[str] | None = None,
+    *,
     create_missing: bool = False,
 ) -> None:
     """

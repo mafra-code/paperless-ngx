@@ -660,7 +660,7 @@ class TestApplyAISuggestionsTask(DirectoriesMixin, TestCase):
         self.assertIsNone(args[0])
         self.assertEqual(args[1].pk, self.doc.pk)
         self.assertEqual(kwargs["fields"], ["tags"])
-        self.assertIs(kwargs["create_missing"], True)
+        self.assertTrue(kwargs["create_missing"])
 
 
 class TestExtractTextTask(DirectoriesMixin, TestCase):
@@ -675,10 +675,10 @@ class TestExtractTextTask(DirectoriesMixin, TestCase):
         return DocumentFactory(**defaults)
 
     def _script(self) -> str:
-        handle = tempfile.NamedTemporaryFile(delete=False)
-        handle.close()
-        self.addCleanup(Path(handle.name).unlink, missing_ok=True)
-        return handle.name
+        with tempfile.NamedTemporaryFile(delete=False) as handle:
+            name = handle.name
+        self.addCleanup(Path(name).unlink, missing_ok=True)
+        return name
 
     def test_environment_uses_latest_version_and_manual_trigger(self) -> None:
         """
