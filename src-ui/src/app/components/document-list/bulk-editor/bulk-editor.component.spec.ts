@@ -2031,22 +2031,24 @@ describe('BulkEditorComponent', () => {
 
     settingsService.set(SETTINGS_KEYS.EXTRACT_TEXT_CONFIGURED, true)
     settingsService.set(SETTINGS_KEYS.AI_ENABLED, true)
-    fixture.detectChanges()
+    const configured = TestBed.createComponent(BulkEditorComponent)
+    configured.detectChanges()
     expect(
-      fixture.debugElement.query(By.css('button[aria-label="Extract text"]'))
+      configured.debugElement.query(By.css('button[aria-label="Extract text"]'))
         .nativeElement.disabled
     ).toBeFalsy()
     expect(
-      fixture.debugElement.query(By.css('button[aria-label="Tag with AI"]'))
+      configured.debugElement.query(By.css('button[aria-label="Tag with AI"]'))
         .nativeElement.disabled
     ).toBeFalsy()
 
     jest
       .spyOn(permissionsService, 'currentUserHasObjectPermissions')
       .mockReturnValue(false)
-    fixture.detectChanges()
+    const disabled = TestBed.createComponent(BulkEditorComponent)
+    disabled.detectChanges()
     expect(
-      fixture.debugElement.query(By.css('button[aria-label="Extract text"]'))
+      disabled.debugElement.query(By.css('button[aria-label="Extract text"]'))
         .nativeElement.disabled
     ).toBeTruthy()
   })

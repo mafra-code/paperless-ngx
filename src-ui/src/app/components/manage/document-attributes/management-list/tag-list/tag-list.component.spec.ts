@@ -4,6 +4,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing'
 import { EventEmitter } from '@angular/core'
 import { ComponentFixture, TestBed } from '@angular/core/testing'
 import { FormsModule, ReactiveFormsModule } from '@angular/forms'
+import { By } from '@angular/platform-browser'
 import { NgbModal, NgbPaginationModule } from '@ng-bootstrap/ng-bootstrap'
 import { NgxBootstrapIconsModule, allIcons } from 'ngx-bootstrap-icons'
 import { of } from 'rxjs'
@@ -154,7 +155,9 @@ describe('TagListComponent', () => {
     const fresh = TestBed.createComponent(TagListComponent)
     fresh.detectChanges()
     expect(fresh.nativeElement.textContent).toContain('Find duplicates')
-    fresh.componentInstance.selectedObjects = new Set([1, 2])
+    const rows = fresh.debugElement.queryAll(By.css('tr.data-row'))
+    rows[0].triggerEventHandler('click', { stopPropagation() {} })
+    rows[1].triggerEventHandler('click', { stopPropagation() {} })
     fresh.detectChanges()
     expect(fresh.nativeElement.textContent).toContain('Merge')
   })
