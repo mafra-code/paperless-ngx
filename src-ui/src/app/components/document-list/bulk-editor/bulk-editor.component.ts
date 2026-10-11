@@ -136,6 +136,14 @@ export class BulkEditorComponent
     SETTINGS_KEYS.BULK_EDIT_CONFIRMATION_DIALOGS
   )
 
+  get extractTextConfigured(): boolean {
+    return this.settings.get(SETTINGS_KEYS.EXTRACT_TEXT_CONFIGURED) === true
+  }
+
+  get aiEnabled(): boolean {
+    return this.settings.get(SETTINGS_KEYS.AI_ENABLED) === true
+  }
+
   get userCanEditAll(): boolean {
     let canEdit: boolean = this.permissionService.currentUserCan(
       PermissionAction.Change,
@@ -868,6 +876,43 @@ export class BulkEditorComponent
         this.customFieldsSelectionModel.toggle(newCustomField.id)
       })
     return modal
+  }
+
+  extractText(): void {
+    this.confirmQueuedEdit(
+      $localize`Extract text`,
+      $localize`This operation will extract text for ${this.getSelectionSize()} selected document(s).`,
+      'extract_text',
+    )
+  }
+
+  tagWithAi(): void {
+    this.confirmQueuedEdit(
+      $localize`Tag with AI`,
+      $localize`This operation will tag ${this.getSelectionSize()} selected document(s) with AI.`,
+      'ai_tags',
+    )
+  }
+
+  private confirmQueuedEdit(
+    title: string,
+    message: string,
+    method: DocumentBulkEditMethod,
+  ): void {
+    if (this.showConfirmationDialogs) {
+      const modal = this.modalService.open(ConfirmDialogComponent, {
+        backdrop: 'static',
+      })
+      modal.componentInstance.title = title
+      modal.componentInstance.message = message
+      modal.componentInstance.confirmClicked
+        .pipe(takeUntil(this.unsubscribeNotifier))
+        .subscribe(() => {
+          this.executeBulkEditMethod(modal, method, {})
+        })
+    } else {
+      this.executeBulkEditMethod(null, method, {})
+    }
   }
 
   applyDelete() {

@@ -254,6 +254,20 @@ describe(`DocumentService`, () => {
     })
   })
 
+  it('should call bulk edit for extract text', () => {
+    subscription = service
+      .bulkEdit({ documents: [4] }, 'extract_text', {})
+      .subscribe()
+    const req = httpTestingController.expectOne(
+      `${environment.apiBaseUrl}${endpoint}/bulk_edit/`
+    )
+    expect(req.request.body).toEqual({
+      documents: [4],
+      method: 'extract_text',
+      parameters: {},
+    })
+  })
+
   it('should call appropriate api endpoint for bulk edit with all, filters, and exclusions', () => {
     const method = 'modify_tags'
     const parameters = {

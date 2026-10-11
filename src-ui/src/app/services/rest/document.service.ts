@@ -38,6 +38,8 @@ export type DocumentBulkEditMethod =
   | 'modify_tags'
   | 'modify_custom_fields'
   | 'set_permissions'
+  | 'extract_text'
+  | 'ai_tags'
 
 export interface MergeDocumentsRequest {
   metadata_document_id?: number

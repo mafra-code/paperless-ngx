@@ -1,0 +1,31 @@
+<div class="modal-header">
+  <h4 class="modal-title" i18n>Possible duplicate tags</h4>
+  <button type="button" class="btn-close" aria-label="Close" i18n-aria-label (click)="cancel()"></button>
+</div>
+<div class="modal-body">
+  @if (!groups.length) {
+    <p class="mb-0" i18n>No duplicate tags found.</p>
+  }
+  @for (group of groups; track $index) {
+    <div class="border rounded p-2 mb-2">
+      <ul class="mb-2">
+        @for (tag of group.tags; track tag.id) {
+          <li>
+            {{ tag.name }}
+            <span class="text-muted" i18n> ({{ tag.document_count }} documents)</span>
+            @if (tag.is_inbox) {
+              <span class="badge bg-light text-dark ms-1" i18n>Inbox</span>
+            }
+            @if (tag.id === group.suggested_survivor_id) {
+              <span class="badge bg-secondary ms-1" i18n>Suggested</span>
+            }
+          </li>
+        }
+      </ul>
+      <button type="button" class="btn btn-sm btn-outline-primary" (click)="mergeGroup.emit(group)" i18n>Merge</button>
+    </div>
+  }
+</div>
+<div class="modal-footer">
+  <button type="button" class="btn btn-outline-secondary" (click)="cancel()" i18n>Close</button>
+</div>

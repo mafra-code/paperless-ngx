@@ -68,6 +68,12 @@
         @if (hasSelection) {
           &nbsp;({{selectedCount}} selected)
         }
+        @if (showTagTools) {
+          <button type="button" class="btn btn-sm btn-outline-primary ms-2" (click)="openTagDuplicates()" *pngxIfPermissions="[{ action: PermissionAction.Change, type: permissionType }, { action: PermissionAction.Delete, type: permissionType }]" i18n>Find duplicates</button>
+          @if (selectedObjects.size >= 2) {
+            <button type="button" class="btn btn-sm btn-outline-primary" (click)="openTagMerge()" *pngxIfPermissions="[{ action: PermissionAction.Change, type: permissionType }, { action: PermissionAction.Delete, type: permissionType }]" i18n>Merge</button>
+          }
+        }
       </div>
     }
     @if (collectionSize() > 20) {

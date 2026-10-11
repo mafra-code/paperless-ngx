@@ -1,0 +1,28 @@
+<div class="modal-header">
+  <h4 class="modal-title" i18n>Merge tags</h4>
+  <button type="button" class="btn-close" aria-label="Close" i18n-aria-label (click)="cancel()"></button>
+</div>
+<div class="modal-body">
+  <p i18n>Choose the tag to keep. Documents, child tags, workflows, mail rules, and saved views move to it. The other tags are deleted.</p>
+  @for (tag of tags; track tag.id) {
+    <div class="form-check">
+      <input class="form-check-input" type="radio" name="tagSurvivor" [id]="'tagSurvivor' + tag.id" [checked]="survivorId === tag.id" (change)="survivorId = tag.id">
+      <label class="form-check-label" [for]="'tagSurvivor' + tag.id">
+        {{ tag.name }}
+        <span class="text-muted" i18n> ({{ tag.document_count || 0 }} documents)</span>
+      </label>
+    </div>
+  }
+  @if (sources.length) {
+    <p class="mt-3 mb-1" i18n>These tags will be merged into the selected tag:</p>
+    <ul class="mb-0">
+      @for (tag of sources; track tag.id) {
+        <li>{{ tag.name }}</li>
+      }
+    </ul>
+  }
+</div>
+<div class="modal-footer">
+  <button type="button" class="btn btn-outline-secondary" (click)="cancel()" i18n>Cancel</button>
+  <button type="button" class="btn btn-primary" (click)="confirm()" [disabled]="sources.length === 0" i18n>Merge</button>
+</div>

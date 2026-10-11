@@ -15,6 +15,7 @@ import { Correspondent } from 'src/app/data/correspondent'
 import { CustomField, CustomFieldDataType } from 'src/app/data/custom-field'
 import { DocumentType } from 'src/app/data/document-type'
 import { FILTER_TITLE } from 'src/app/data/filter-rule-type'
+import { SETTINGS_KEYS } from 'src/app/data/ui-settings'
 import { Results } from 'src/app/data/results'
 import { StoragePath } from 'src/app/data/storage-path'
 import { Tag } from 'src/app/data/tag'
@@ -2006,5 +2007,123 @@ describe('BulkEditorComponent', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/share-links'], {
       queryParams: { type: 'bundles' },
     })
+  })
+
+  it('should show extract text and tag with AI only when configured', () => {
+    const settingsService = TestBed.inject(SettingsService)
+    jest.spyOn(permissionsService, 'currentUserCan').mockReturnValue(true)
+    jest
+      .spyOn(permissionsService, 'currentUserHasObjectPermissions')
+      .mockReturnValue(true)
+    jest
+      .spyOn(documentListViewService, 'documents', 'get')
+      .mockReturnValue([{ id: 3 }] as any)
+    jest
+      .spyOn(documentListViewService, 'selected', 'get')
+      .mockReturnValue(new Set([3]))
+    fixture.detectChanges()
+    expect(
+      fixture.debugElement.query(By.css('button[aria-label="Extract text"]'))
+    ).toBeNull()
+    expect(
+      fixture.debugElement.query(By.css('button[aria-label="Tag with AI"]'))
+    ).toBeNull()
+
+    settingsService.set(SETTINGS_KEYS.EXTRACT_TEXT_CONFIGURED, true)
+    settingsService.set(SETTINGS_KEYS.AI_ENABLED, true)
+    fixture.detectChanges()
+    expect(
+      fixture.debugElement.query(By.css('button[aria-label="Extract text"]'))
+        .nativeElement.disabled
+    ).toBeFalsy()
+    expect(
+      fixture.debugElement.query(By.css('button[aria-label="Tag with AI"]'))
+        .nativeElement.disabled
+    ).toBeFalsy()
+
+    jest
+      .spyOn(permissionsService, 'currentUserHasObjectPermissions')
+      .mockReturnValue(false)
+    fixture.detectChanges()
+    expect(
+      fixture.debugElement.query(By.css('button[aria-label="Extract text"]'))
+        .nativeElement.disabled
+    ).toBeTruthy()
+  })
+
+  it('should confirm extract text and queue it for the selection', () => {
+    const confirmClicked = new EventEmitter<void>()
+    const modalRef: Partial<NgbModalRef> = {
+      close: jest.fn(),
+      componentInstance: {
+        title: '',
+        message: '',
+        buttonsEnabled: signal(true),
+        confirmClicked,
+      },
+    }
+    jest.spyOn(modalService, 'open').mockReturnValue(modalRef as NgbModalRef)
+    jest
+      .spyOn(documentListViewService, 'selected', 'get')
+      .mockReturnValue(new Set([3, 4]))
+    jest
+      .spyOn(documentListViewService, 'selectedCount', 'get')
+      .mockReturnValue(2)
+    jest.spyOn(documentListViewService, 'reload').mockImplementation()
+    jest
+      .spyOn(documentListViewService, 'reduceSelectionToFilter')
+      .mockImplementation()
+
+    component.extractText()
+    expect(modalRef.componentInstance.message).toContain('2')
+    confirmClicked.emit()
+
+    const req = httpTestingController.expectOne(
+      `${environment.apiBaseUrl}documents/bulk_edit/`
+    )
+    expect(req.request.body).toEqual({
+      documents: [3, 4],
+      method: 'extract_text',
+      parameters: {},
+    })
+    req.flush({ result: 'OK' })
+  })
+
+  it('should confirm tag with AI and queue it for the selection', () => {
+    const confirmClicked = new EventEmitter<void>()
+    const modalRef: Partial<NgbModalRef> = {
+      close: jest.fn(),
+      componentInstance: {
+        title: '',
+        message: '',
+        buttonsEnabled: signal(true),
+        confirmClicked,
+      },
+    }
+    jest.spyOn(modalService, 'open').mockReturnValue(modalRef as NgbModalRef)
+    jest
+      .spyOn(documentListViewService, 'selected', 'get')
+      .mockReturnValue(new Set([8]))
+    jest
+      .spyOn(documentListViewService, 'selectedCount', 'get')
+      .mockReturnValue(8)
+    jest.spyOn(documentListViewService, 'reload').mockImplementation()
+    jest
+      .spyOn(documentListViewService, 'reduceSelectionToFilter')
+      .mockImplementation()
+
+    component.tagWithAi()
+    expect(modalRef.componentInstance.message).toContain('8')
+    confirmClicked.emit()
+
+    const req = httpTestingController.expectOne(
+      `${environment.apiBaseUrl}documents/bulk_edit/`
+    )
+    expect(req.request.body).toEqual({
+      documents: [8],
+      method: 'ai_tags',
+      parameters: {},
+    })
+    req.flush({ result: 'OK' })
   })
 })

@@ -78,6 +78,16 @@
         <i-bs name="person-fill-lock"></i-bs><div class="d-none d-sm-inline ms-1"><ng-container i18n>Permissions</ng-container></div>
       </button>
     </div>
+    @if (extractTextConfigured) {
+      <button type="button" class="btn btn-sm btn-outline-primary me-2" (click)="extractText()" [disabled]="!userCanEditAll" aria-label="Extract text" i18n-aria-label>
+        <i-bs name="body-text"></i-bs><div class="d-none d-sm-inline ms-1"><ng-container i18n>Extract text</ng-container></div>
+      </button>
+    }
+    @if (aiEnabled) {
+      <button type="button" class="btn btn-sm btn-outline-primary me-2" (click)="tagWithAi()" [disabled]="!userCanEditAll" aria-label="Tag with AI" i18n-aria-label>
+        <i-bs name="tag-fill"></i-bs><div class="d-none d-sm-inline ms-1"><ng-container i18n>Tag with AI</ng-container></div>
+      </button>
+    }
   </div>
   <div class="d-flex align-items-center gap-2 ms-auto">
     <div class="btn-toolbar">

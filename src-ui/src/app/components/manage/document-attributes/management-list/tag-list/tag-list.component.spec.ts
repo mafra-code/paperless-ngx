@@ -1,13 +1,15 @@
 import { DatePipe } from '@angular/common'
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 import { provideHttpClientTesting } from '@angular/common/http/testing'
+import { EventEmitter } from '@angular/core'
 import { ComponentFixture, TestBed } from '@angular/core/testing'
 import { FormsModule, ReactiveFormsModule } from '@angular/forms'
-import { NgbPaginationModule } from '@ng-bootstrap/ng-bootstrap'
+import { NgbModal, NgbPaginationModule } from '@ng-bootstrap/ng-bootstrap'
 import { NgxBootstrapIconsModule, allIcons } from 'ngx-bootstrap-icons'
 import { of } from 'rxjs'
 import { IfPermissionsDirective } from 'src/app/directives/if-permissions.directive'
 import { SortableDirective } from 'src/app/directives/sortable.directive'
+import { PermissionsService } from 'src/app/services/permissions.service'
 import { TagService } from 'src/app/services/rest/tag.service'
 import { PageHeaderComponent } from '../../../../common/page-header/page-header.component'
 import { TagListComponent } from './tag-list.component'
@@ -144,5 +146,66 @@ describe('TagListComponent', () => {
 
     component.clearSelection()
     expect(component.selectedObjects.size).toBe(0)
+  })
+
+  it('should offer merge and find duplicates for tag permissions', () => {
+    const permissions = TestBed.inject(PermissionsService)
+    jest.spyOn(permissions, 'currentUserCan').mockReturnValue(true)
+    const fresh = TestBed.createComponent(TagListComponent)
+    fresh.detectChanges()
+    expect(fresh.nativeElement.textContent).toContain('Find duplicates')
+    fresh.componentInstance.selectedObjects = new Set([1, 2])
+    fresh.detectChanges()
+    expect(fresh.nativeElement.textContent).toContain('Merge')
+  })
+
+  it('should merge a duplicate group after the survivor is confirmed', () => {
+    const modal = TestBed.inject(NgbModal)
+    const mergeGroup = new EventEmitter<any>()
+    const modalRef = {
+      close: jest.fn(),
+      componentInstance: {
+        groups: [],
+        tags: [],
+        survivorId: null,
+        mergeGroup,
+      },
+      result: Promise.resolve({ target: 1, sources: [2] }),
+    }
+    jest.spyOn(modal, 'open').mockReturnValue(modalRef as any)
+    const group = {
+      suggested_survivor_id: 1,
+      tags: [
+        {
+          id: 1,
+          name: 'Invoice',
+          document_count: 2,
+          is_inbox: true,
+          owner: null,
+        },
+        {
+          id: 2,
+          name: 'invoice',
+          document_count: 1,
+          is_inbox: false,
+          owner: null,
+        },
+      ],
+    }
+    jest.spyOn(tagService, 'mergeSuggestions').mockReturnValue(
+      of({ groups: [group] })
+    )
+    const merge = jest
+      .spyOn(tagService, 'merge')
+      .mockReturnValue(of({ result: 'OK' }))
+    jest.spyOn(component, 'reloadData').mockImplementation()
+
+    component.openTagDuplicates()
+    expect(modalRef.componentInstance.groups).toEqual([group])
+    mergeGroup.emit(group)
+
+    return modalRef.result.then(() => {
+      expect(merge).toHaveBeenCalledWith(1, [2])
+    })
   })
 })

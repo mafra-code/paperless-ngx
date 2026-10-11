@@ -84,6 +84,8 @@ export abstract class ManagementListComponent<T extends MatchingModel>
   public permissionType: PermissionType
   public extraColumns: ManagementListColumn[]
 
+  public showTagTools = false
+
   private readonly settingsService = inject(SettingsService)
 
   @ViewChildren(SortableDirective) headers: QueryList<SortableDirective>
@@ -329,6 +331,10 @@ export abstract class ManagementListComponent<T extends MatchingModel>
       },
     })
   }
+
+  openTagMerge(): void {}
+
+  openTagDuplicates(): void {}
 
   userCanDelete(object: ObjectWithPermissions): boolean {
     return this.permissionsService.currentUserOwnsObject(object)
