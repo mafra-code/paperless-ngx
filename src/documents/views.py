@@ -226,6 +226,9 @@ from documents.serialisers import WorkflowActionSerializer
 from documents.serialisers import WorkflowSerializer
 from documents.serialisers import WorkflowTriggerSerializer
 from documents.signals import document_updated
+from documents.tag_merge import TagMergeRefused
+from documents.tag_merge import merge_tags
+from documents.tag_merge import suggest_tag_merges
 from documents.tasks import build_share_link_bundle
 from documents.tasks import consume_file
 from documents.tasks import empty_trash
@@ -645,6 +648,13 @@ class TagViewSet(PermissionsAwareDocumentCountMixin, ModelViewSet[Tag]):
     filterset_class = TagFilterSet
     ordering_fields = ("color", "name", "matching_algorithm", "match", "document_count")
 
+    def get_permissions(self):
+        # POST would otherwise require add_tag. Merge checks change and
+        # delete itself, including object permissions on each tag.
+        if self.action == "merge":
+            self.permission_classes = (IsAuthenticated,)
+        return super().get_permissions()
+
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context["document_count_filter"] = self.get_document_count_filter()
@@ -703,6 +713,42 @@ class TagViewSet(PermissionsAwareDocumentCountMixin, ModelViewSet[Tag]):
         new_parent = tag.get_parent()
         if new_parent and old_parent != new_parent:
             update_document_parent_tags(tag, new_parent)
+
+    @extend_schema(
+        request=inline_serializer(
+            name="TagMergeRequest",
+            fields={
+                "target": serializers.IntegerField(),
+                "sources": serializers.ListField(child=serializers.IntegerField()),
+            },
+        ),
+        responses={200: OpenApiTypes.OBJECT},
+    )
+    @action(detail=False, methods=["post"], url_path="merge")
+    def merge(self, request):
+        target_id = request.data.get("target")
+        source_ids = request.data.get("sources")
+        if not isinstance(target_id, int) or not isinstance(source_ids, list):
+            return HttpResponseBadRequest("target and sources are required")
+        if not source_ids or not all(isinstance(item, int) for item in source_ids):
+            return HttpResponseBadRequest("sources must be a list of tag ids")
+        try:
+            result = merge_tags(
+                user=request.user,
+                target_id=target_id,
+                source_ids=source_ids,
+            )
+        except TagMergeRefused as exc:
+            if exc.status_code == 403:
+                return HttpResponseForbidden(str(exc))
+            return HttpResponseBadRequest(str(exc))
+        return Response(result)
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    @action(detail=False, methods=["get"], url_path="merge_suggestions")
+    def merge_suggestions(self, request):
+        tags = self.filter_queryset(self.get_queryset())
+        return Response({"groups": suggest_tag_merges(tags)})
 
 
 @extend_schema_view(**generate_object_with_permissions_schema(DocumentTypeSerializer))
